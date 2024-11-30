@@ -33,10 +33,10 @@ data class Course(
 )
 data class Schedule(
     @PrimaryKey(autoGenerate = true) val scheduleId: Int = 0,
-    val courseId: Int, // Foreign key referencing Course
-    val dayOfWeek: String, // "Monday", "Tuesday", etc.
-    val startTime: String, // Time in 24-hour format, e.g., "10:00"
-    val endTime: String // Time in 24-hour format, e.g., "11:00"
+    val courseId: Int,
+    val dayOfWeek: String, // "MONDAY", "TUESDAY" like format
+    val startTime: String, // 24 hour time format "13:00"
+    val endTime: String // 24 hour time format "14:00"
 )
 
 @Entity(
@@ -57,16 +57,15 @@ data class Schedule(
     ],
     indices = [Index(value = ["courseId"]), Index(value = ["scheduleId"])]
 )
-
-// CLasses to store the data fetched from the database
 data class AttendanceRecord(
     @PrimaryKey(autoGenerate = true) val attendanceId: Int = 0,
     val courseId: Int,
-    val scheduleId: Int, // Foreign key referencing Schedule
+    val scheduleId: Int,
     val date: String, // Date in "yyyy-MM-dd" format
-    val wasPresent: Boolean // True if the user was present
+    val wasPresent: Boolean
 )
 
+// CLasses to store the data fetched from the database
 data class CourseDetails(
     val courseName: String,
     val location: String
@@ -82,6 +81,16 @@ data class AttendanceSummary(
     val presentCount: Int
 )
 
+data class CourseScheduleMap(
+    val courseName: String,
+    val schedules: List<ScheduleEntry>
+)
+
+data class ScheduleEntry(
+    val dayOfWeek: String,
+    val startTime: String,
+    val endTime: String
+)
 
 @Dao
 interface CourseDao {
@@ -97,7 +106,6 @@ interface CourseDao {
     @Query("SELECT courseId, courseName FROM courses")
     suspend fun getCourseName(): List<CourseName>
 
-    // Delete a specific course (cascading deletion will handle related schedules and attendance records)
     @Delete
     suspend fun deleteCourse(course: Course)
 }
@@ -116,19 +124,17 @@ interface ScheduleDao {
     @Query("SELECT * FROM schedules WHERE dayOfWeek = :dayOfWeek AND :time BETWEEN startTime AND endTime")
     suspend fun getCurrentlyScheduledClasses(dayOfWeek: String, time: String): Schedule
 
-    // Delete a specific schedule (cascading deletion will handle related attendance records)
-    @Delete
-    suspend fun deleteSchedule(schedule: Schedule)
-
     @Query("DELETE FROM schedules WHERE courseId = :courseId")
     suspend fun deleteSchedulesForCourse(courseId: Int)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSchedules(schedules: List<Schedule>)
 
-    // Get the schedule for a specific day of week
     @Query("SELECT * FROM schedules WHERE dayOfWeek = :dayOfWeek")
     suspend fun getSchedulesForDay(dayOfWeek: String): List<Schedule>
+
+    @Delete
+    suspend fun deleteSchedule(schedule: Schedule)
 }
 
 @Dao
@@ -147,4 +153,10 @@ interface AttendanceDao {
 
     @Query("DELETE FROM attendance_records WHERE scheduleId = :scheduleId")
     suspend fun deleteAttendanceForSchedule(scheduleId: Int)
+
+    @Query("SELECT COUNT(1) FROM attendance_records WHERE scheduleId = :scheduleId AND date = :date")
+    suspend fun getIfAttendedClass(scheduleId: Int, date: String) : Int
+
+    @Query("DELETE FROM attendance_records WHERE scheduleId = :scheduleId AND date = :date")
+    suspend fun deletePreviousUnmarkedAttendance(scheduleId: Int, date: String)
 }

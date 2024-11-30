@@ -14,7 +14,6 @@ class AttendanceApp : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        // Initialize the database
         database = DatabaseProvider.getDatabase(this)
     }
 }

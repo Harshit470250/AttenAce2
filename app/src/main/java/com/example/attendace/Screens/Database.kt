@@ -1,10 +1,9 @@
 package com.example.attendace.Screens
 
-import androidx.room.Database
-import androidx.room.RoomDatabase
 import android.content.Context
+import androidx.room.Database
 import androidx.room.Room
-import android.app.Application
+import androidx.room.RoomDatabase
 
 @Database(
     entities = [Course::class, Schedule::class, AttendanceRecord::class],

@@ -1,7 +1,12 @@
 package com.example.attendace.Screens
 
+import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
-import com.example.attendace.AttendanceApp
+import android.net.Uri
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,8 +22,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.TopAppBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
@@ -30,57 +37,34 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.*
-import androidx.compose.material.TopAppBar
+import com.example.attendace.AttendanceApp
 import kotlinx.coroutines.launch
-import android.util.Log
-import androidx.compose.material3.Button
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import org.threeten.bp.LocalDateTime
 import org.threeten.bp.LocalTime
 import org.threeten.bp.format.DateTimeFormatter
-import android.Manifest
-import android.app.Activity
-import android.content.ContentResolver
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.os.Bundle
-import android.provider.MediaStore
-import android.widget.Button
-import android.widget.Toast
-//import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.FileProvider
-import android.os.Build
-import android.provider.DocumentsContract
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.ui.platform.LocalContext
+import java.io.File
+import java.io.FileOutputStream
 
 
 @Composable
 fun HomeScreen(navController: NavController? = null) {
     // Initializing the drawer
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val drawerState = rememberDrawerState(DrawerValue.Open)
 
     // Initializing the Coroutine use to perform asynchronous task
     val scope = rememberCoroutineScope()
@@ -116,7 +100,10 @@ fun HomeScreen(navController: NavController? = null) {
         contract = ActivityResultContracts.GetContent(),
         onResult = { uri: Uri? ->
             selectedFileUri = uri
-            // You can handle the file URI here
+
+            scope.launch {
+                handleFile(selectedFileUri, context, courseDao, scheduleDao)
+            }
         }
     )
 
@@ -138,7 +125,6 @@ fun HomeScreen(navController: NavController? = null) {
             drawerState.close()
         }
     }
-
 
     LaunchedEffect(Unit) {
         scope.launch {
@@ -190,8 +176,14 @@ fun HomeScreen(navController: NavController? = null) {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(onClick = {
-                                scope.launch {
-                                    drawerState.open()
+                                if (drawerState.isClosed) {
+                                    scope.launch {
+                                        drawerState.open()
+                                    }
+                                } else {
+                                    scope.launch {
+                                        drawerState.close()
+                                    }
                                 }
                             }) {
                                 Icon(
@@ -223,22 +215,18 @@ fun HomeScreen(navController: NavController? = null) {
                 if (upcomingClass != null) {
                     UpcomingClassSection(navController, scheduleWithCourse = upcomingClass!!)
                 } else {
-//                    Button(
-//                        onClick = {
-//                            // Check if permission is granted
-//                            if (hasStoragePermission) {
-//                                // Open the file picker
-//                                openFilePicker.launch("application/*") // You can modify MIME type to filter the file types
-//                            } else {
-//                                // Request permission if not granted
-//                                requestPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
-//                            }
-//                        },
-//                        modifier = Modifier.align(Alignment.CenterHorizontally)
-//                    ) {
-//                        Text("Upload Timetable")
-//                    }
-                    Text("No Schedules" , modifier = Modifier.align(Alignment.CenterHorizontally))
+                    Button(
+                        onClick = {
+                            if (hasStoragePermission) {
+                                openFilePicker.launch("image/*")
+                            } else {
+                                requestPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    ) {
+                        Text("Upload Timetable")
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -282,15 +270,6 @@ fun DrawerContent(navController: NavController?) {
                     navController?.navigate("attendanceHistory")
                 }
         )
-//        Spacer(modifier = Modifier.height(8.dp))
-//        Text(text = "Settings",
-//            modifier = Modifier
-//                .clickable {
-//                    navController?.navigate("settings")
-//                }
-//        )
-//        Spacer(modifier = Modifier.height(8.dp))
-//        Text(text = "Logout")
     }
 }
 
@@ -350,5 +329,34 @@ fun ClassCard(schedule: Schedule, courseName: String, navController: NavControll
             Text(text = "Course: $courseName", style = MaterialTheme.typography.bodyLarge)
             Text(text = "Time: ${schedule.startTime} - ${schedule.endTime}")
         }
+    }
+}
+
+suspend fun handleFile(uri: Uri?, context : Context, courseDao : CourseDao, scheduleDao : ScheduleDao) {
+    try {
+        // Gaining access to the content provider
+        val contentResolver = context.contentResolver
+
+        // Open an input stream to the selected file
+        if(uri != null) {
+            val inputStream = contentResolver.openInputStream(uri)
+
+            // Storing the file
+            val file = File(context.filesDir, "picked_image.png")
+
+            val outputStream = FileOutputStream(file)
+
+            // Copy data from the input stream (the selected file) to the output stream (the local file)
+            inputStream?.copyTo(outputStream)
+
+            // Close the streams
+            inputStream?.close()
+            outputStream.close()
+
+            uploadImageToServer(file, courseDao, scheduleDao)
+        }
+
+    } catch (e: Exception) {
+        Log.e("Upload Timetable", "Image not picked")
     }
 }

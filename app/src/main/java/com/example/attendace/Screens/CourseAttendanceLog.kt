@@ -42,7 +42,6 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
 import android.util.Log
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.lazy.LazyColumn
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,7 +64,6 @@ fun CourseAttendanceLog(navController: NavController, courseId: Int?) {
             if (courseId != null)
                 scheduleList = scheduleDao.getSchedulesForCourse(courseId)
 
-            schedules.clear()
             schedules.addAll(scheduleList)
         }
     }
@@ -76,7 +74,6 @@ fun CourseAttendanceLog(navController: NavController, courseId: Int?) {
     // Update the the schedule based on what user have have changed when back button is pressed
     BackHandler {
         coroutineScope.launch {
-            Log.d("Navigation", "Screen disposed")
             if (courseId != null) {
                 scheduleDao.deleteSchedulesForCourse(courseId)
                 scheduleDao.insertSchedules(schedules)
@@ -89,7 +86,6 @@ fun CourseAttendanceLog(navController: NavController, courseId: Int?) {
     DisposableEffect(Unit) {
         onDispose {
             coroutineScope.launch {
-
                 if (courseId != null) {
                     scheduleDao.deleteSchedulesForCourse(courseId)
                     scheduleDao.insertSchedules(schedules)
@@ -108,8 +104,6 @@ fun CourseAttendanceLog(navController: NavController, courseId: Int?) {
                     ) {
                         IconButton(onClick = {
                             coroutineScope.launch {
-                                Log.d("MyTagFinalListToBeUpdated", schedules.toString())
-                                Log.d("Navigation", "Screen disposed")
                                 if (courseId != null) {
                                     scheduleDao.deleteSchedulesForCourse(courseId)
                                     scheduleDao.insertSchedules(schedules)
@@ -217,7 +211,7 @@ fun CourseAttendanceContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        ScheduleCard(schedules, courseId)
+        ScheduleCard(schedules)
     }
 }
 
@@ -242,7 +236,7 @@ fun AttendanceRow(label: String, value: String) {
 }
 
 @Composable
-fun ScheduleCard(schedules: MutableList<Schedule>, courseId: Int) {
+fun ScheduleCard(schedules: MutableList<Schedule>) {
     if (schedules.isEmpty()) {
         Text(
             text = "No schedules available",

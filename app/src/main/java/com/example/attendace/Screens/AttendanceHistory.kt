@@ -64,9 +64,14 @@ fun AttendanceHistory(navController: NavController) {
     LaunchedEffect(Unit) {
         coroutineScope.launch {
             attendanceRecord = attendanceDao.getAllRecords()
+        }
+    }
+    LaunchedEffect(Unit) {
+        coroutineScope.launch {
             courseNameList = courseDao.getCourseName()
         }
     }
+
 
     val weeklyRecord = weeklyAttendanceSummary(attendanceRecord, today)
     val monthlyRecord = monthlyAttendanceSummary(attendanceRecord, today)

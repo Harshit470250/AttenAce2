@@ -5,7 +5,9 @@ import android.util.Log
 import androidx.work.WorkerParameters
 import android.annotation.SuppressLint
 import android.content.Context.MODE_PRIVATE
+import android.content.pm.PackageManager
 import android.location.Location
+import androidx.core.content.ContextCompat
 import androidx.work.CoroutineWorker
 import com.example.attendace.AttendanceApp
 import com.example.attendace.SharedPrefHelper
@@ -21,18 +23,19 @@ import kotlin.coroutines.suspendCoroutine
 
 
 class BackgroundTaskWorker(appContext: Context, workerParams: WorkerParameters) : CoroutineWorker(appContext, workerParams) {
-    lateinit var fusedLocationClient: FusedLocationProviderClient
-
     @SuppressLint("MissingPermission")
     override suspend fun doWork(): Result = coroutineScope {
-        Log.d("BackgroundTaskWorker", "Running background task...")
 
-
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(applicationContext)
+        val fusedLocationClient = LocationServices.getFusedLocationProviderClient(applicationContext)
 
         val sharedPreferences = applicationContext.getSharedPreferences("app_preferences", MODE_PRIVATE)
         val isLocationPermission = SharedPrefHelper.getBoolean(sharedPreferences, "hasForegroundPermission", false) &&
                 SharedPrefHelper.getBoolean(sharedPreferences, "hasBackgroundPermission", false)
+
+//        val isLocationPermissionGranted = ContextCompat.checkSelfPermission(
+//            applicationContext,
+//            android.Manifest.permission.ACCESS_FINE_LOCATION
+//        ) == PackageManager.PERMISSION_GRANTED
 
         if (!isLocationPermission) {
             Log.e("BackgroundTaskWorker", "Location permissions are not granted.")
@@ -57,8 +60,15 @@ class BackgroundTaskWorker(appContext: Context, workerParams: WorkerParameters) 
         // Find the class scheduled for current time and date
         val currentlyScheduledClasses = scheduleDao.getCurrentlyScheduledClasses(dayOfWeek, "$hour:$minute")
 
+        // Find if attendance is already marked
+        val isAttendanceMarked = attendanceDao.getIfAttendedClass(currentlyScheduledClasses.scheduleId, todaysDate)
+
+        if(isAttendanceMarked == 1) {
+            Result.success()
+        }
+
         // Fetch user location
-        val userLocation = getUserLocation()
+        val userLocation = getUserLocation(fusedLocationClient)
         if (userLocation != null) {
             val distanceBetweenUserAndClass =
                 distanceBetweenUserAndClass(userLocation, classLatitude, classLongitude)
@@ -72,6 +82,8 @@ class BackgroundTaskWorker(appContext: Context, workerParams: WorkerParameters) 
                 wasPresent = false
             )
 
+            // First delete the already marked attendance if any and then insert the attendance
+            attendanceDao.deletePreviousUnmarkedAttendance(currentlyScheduledClasses.scheduleId, todaysDate)
             if (distanceBetweenUserAndClass <= 50) {
                 attendanceDao.insertAttendanceRecord(attendanceRecord.copy(wasPresent = true))
             } else {
@@ -86,7 +98,7 @@ class BackgroundTaskWorker(appContext: Context, workerParams: WorkerParameters) 
     }
 
     @SuppressLint("MissingPermission")
-    private suspend fun getUserLocation(): Location? = suspendCoroutine { continuation ->
+    private suspend fun getUserLocation(fusedLocationClient : FusedLocationProviderClient): Location? = suspendCoroutine { continuation ->
         fusedLocationClient.lastLocation.addOnSuccessListener { location ->
             if (location != null && location.accuracy <= 50) {
                 continuation.resume(location)
